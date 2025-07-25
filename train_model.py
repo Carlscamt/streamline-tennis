@@ -1,7 +1,9 @@
+
 import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import accuracy_score, log_loss
 import joblib
+from features import FEATURES
 
 def train_model():
     """Train tennis prediction model."""
@@ -10,33 +12,33 @@ def train_model():
     df = pd.read_csv('tennis_features.csv')
     df['Date'] = pd.to_datetime(df['Date'])
     
-    features = [
-        'career_win_pct_diff', 'surface_win_pct_diff', 'recent_form_diff',
-        'h2h_win_pct_diff', 'elo_rating_diff',
-        'glicko2_rating_diff', 'glicko2_rd_diff', 'glicko2_volatility_diff'
-    ]
-    
-    X = df[features]
+    # Use centralized feature list
+    X = df[FEATURES]
     y = df['Win']
     
-    print(f"Dataset: {len(df)} matches, {len(features)} features")
+    print(f"Dataset: {len(df)} matches, {len(FEATURES)} features")
     
-    # Temporal split (80% train, 20% test)
-    split_date = df['Date'].quantile(0.8)
-    train_mask = df['Date'] <= split_date
-    
-    # Balance training data (winner + loser perspectives)
-    X_train_orig = X[train_mask]
-    y_train_orig = y[train_mask]
-    
-    # Create balanced dataset - flip features for losers  
-    X_train = pd.concat([X_train_orig, -X_train_orig])
-    y_train = pd.concat([y_train_orig, pd.Series([0]*len(y_train_orig), index=y_train_orig.index)])
-    
-    # Test on original data (all wins)
-    X_test = X[~train_mask]
-    y_test = y[~train_mask]
-    
+    # Proper match-level split: ensure both perspectives of a match are in the same set
+    if 'match_id' in df.columns:
+        unique_matches = df['match_id'].unique()
+        unique_matches.sort()
+        split_idx = int(len(unique_matches) * 0.8)
+        train_matches = unique_matches[:split_idx]
+        test_matches = unique_matches[split_idx:]
+        train_mask = df['match_id'].isin(train_matches)
+        test_mask = df['match_id'].isin(test_matches)
+        X_train = X[train_mask]
+        y_train = y[train_mask]
+        X_test = X[test_mask]
+        y_test = y[test_mask]
+    else:
+        # Fallback: temporal split (should not be used with dyadic data)
+        split_date = df['Date'].quantile(0.8)
+        train_mask = df['Date'] <= split_date
+        X_train = X[train_mask]
+        y_train = y[train_mask]
+        X_test = X[~train_mask]
+        y_test = y[~train_mask]
     print(f"Training: {len(X_train)} samples")
     print(f"Testing: {len(X_test)} samples")
     
@@ -69,7 +71,7 @@ def train_model():
     
     # Feature importance
     importance = pd.DataFrame({
-        'feature': features,
+        'feature': FEATURES,
         'importance': model.feature_importances_
     }).sort_values('importance', ascending=False)
     

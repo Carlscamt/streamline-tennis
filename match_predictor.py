@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from feature_engineering import EloRating, Glicko2Rating
+from features import FEATURES
 from betting_strategy import UncertaintyShrinkageBetting
 
 # Load the trained model and preprocessed data
@@ -235,7 +236,7 @@ def main():
                         'glicko2_volatility_diff': [p2_glicko2['volatility'] - p1_glicko2['volatility']]  # Lower volatility is better
                     })
 
-                    feature_cols = ['career_win_pct_diff', 'surface_win_pct_diff', 'recent_form_diff', 'h2h_win_pct_diff', 'elo_rating_diff', 'glicko2_rating_diff', 'glicko2_rd_diff', 'glicko2_volatility_diff']
+                    feature_cols = FEATURES
                     win_prob = model.predict_proba(features[feature_cols])[0][1]
 
                     # Store results in session state with unique keys
