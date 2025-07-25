@@ -3,13 +3,14 @@
 A comprehensive tennis match prediction system using machine learning and advanced rating algorithms. Predicts match outcomes with 65% accuracy using ELO and Glicko-2 rating systems.
 
 ## 🎯 **Project Status: PRODUCTION READY**
-- **Data Leakage**: ✅ Fixed  
+- **Data Leakage**: ✅ Leak-free, match-level split, balanced perspectives (July 2025 cleanup)
 - **Glicko-2 Integration**: ✅ Working (26.97% total importance)
-- **Model Accuracy**: ✅ 64.96% with proper validation
+- **Model Accuracy**: ✅ 66.5% with robust validation
 - **Web Interface**: ✅ Streamlit app functional
-- **Code Quality**: ✅ Ultra-clean, zero tech debt
+- **Code Quality**: ✅ Ultra-clean, simplified, and version-controlled (July 2025)
 
 ## ✨ Features
+- **Leak-free Feature Engineering**: No dyadic leakage, match-level split, balanced classes
 - **Real-time Match Prediction**: Web interface for live predictions
 - **Advanced Rating Systems**: ELO and Glicko-2 implementations
 - **Uncertainty-Based Betting**: Kelly Criterion betting recommendations
@@ -21,6 +22,7 @@ A comprehensive tennis match prediction system using machine learning and advanc
 - **Python files**: 5 core implementations
 - **Code reduction**: 64% while preserving all functionality
 - **Training script**: 53% smaller (141 → 67 lines)
+- **Cleanup**: July 2025—code, data, and model artifacts cleaned and committed to GitHub
 
 ## 🏗️ **Architecture**
 ```
@@ -74,4 +76,5 @@ Complete original implementation preserved in:
 
 ---
 
-**Status**: ✅ **ULTRA-CLEAN & PRODUCTION-READY** 🎾
+**Status**: ✅ **ULTRA-CLEAN, LEAK-FREE & PRODUCTION-READY** 🎾
+*Latest update: July 2025—major cleanup, leak-free pipeline, and GitHub version control.*
