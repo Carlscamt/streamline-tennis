@@ -1,0 +1,9 @@
+feature,importance
+elo_rating_diff,0.5588065
+glicko2_rd_diff,0.21265648
+surface_win_pct_diff,0.118110895
+h2h_win_pct_diff,0.0333661
+glicko2_volatility_diff,0.02295904
+glicko2_rating_diff,0.022324717
+recent_form_diff,0.016061591
+career_win_pct_diff,0.015714709

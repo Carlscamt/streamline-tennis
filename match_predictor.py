@@ -1,22 +1,111 @@
+"""
+🎾 TENNIS MATCH PREDICTION - INTERACTIVE WEB APPLICATION
+======================================================
+
+STREAMLIT-BASED TENNIS MATCH PREDICTOR
+=====================================
+This is the main interactive web application for predicting tennis match outcomes.
+Users can select players, court surfaces, and get real-time predictions with
+betting recommendations.
+
+🚀 ULTRA-STREAMLINED ARCHITECTURE:
+=================================
+This app uses the ultra-streamlined feature system:
+• All features computed by features.py
+• No need to edit multiple files for new features
+• Automatic integration with the ML model
+
+🎯 FEATURES:
+===========
+• Real-time Match Predictions: Select any two players and get win probabilities
+• Surface-Specific Analysis: Account for different court surfaces (Hard, Clay, Grass, Carpet)
+• Rating Systems: Live ELO and Glicko-2 rating calculations
+• Betting Strategy: Kelly Criterion-based betting recommendations
+• Historical Context: Player statistics and head-to-head analysis
+• Uncertainty Visualization: Confidence intervals and model uncertainty
+
+📊 PREDICTION PIPELINE:
+======================
+1. Load trained XGBoost model and historical data
+2. Calculate player statistics (win rates, ratings, recent form)
+3. Compute feature vector using ultra-streamlined system
+4. Generate probability predictions using trained model
+5. Apply betting strategy with uncertainty shrinkage
+6. Display results with confidence metrics
+
+🎮 USER INTERFACE:
+=================
+Sidebar Controls:
+• Player Selection: Dropdown menus with all historical players
+• Surface Selection: Choose court surface type
+• Date Selection: Set prediction date for historical context
+
+Main Display:
+• Match Prediction: Win probabilities for both players
+• Feature Analysis: Individual feature contributions
+• Betting Recommendations: Suggested bet sizes and expected returns
+• Player Statistics: Recent form, ratings, head-to-head records
+
+🔧 TECHNICAL DETAILS:
+====================
+Dependencies:
+• Streamlit: Web interface framework
+• XGBoost: Machine learning model
+• Pandas/NumPy: Data processing
+• Custom modules: feature_engineering, features, betting_strategy
+
+Data Requirements:
+• tennis_model.joblib: Trained XGBoost model
+• tennis_features.csv: Historical match data (65,715+ matches)
+• Features defined in features.py
+
+Performance Optimizations:
+• @st.cache_resource: Cached model loading
+• @st.cache_data: Cached data processing
+• Efficient rating calculations with date-based filtering
+
+🚀 RUNNING THE APPLICATION:
+===========================
+Command: streamlit run match_predictor.py
+Access: http://localhost:8501
+Requirements: All dependencies in requirements.txt
+
+💡 CUSTOMIZATION:
+================
+• Add new features: Edit features.py (automatically integrates)
+• Modify betting strategy: Edit betting_strategy.py
+• Update model: Retrain using train_model.py
+• Change UI: Modify Streamlit components in this file
+
+🔗 RELATED FILES:
+================
+• features.py: Feature computation system (ultra-streamlined)
+• feature_engineering.py: Rating systems (ELO, Glicko-2)
+• betting_strategy.py: Kelly Criterion implementation
+• train_model.py: Model training pipeline
+• tennis_model.joblib: Trained XGBoost model
+• tennis_features.csv: Historical match database
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from feature_engineering import EloRating, Glicko2Rating
-from features import FEATURES
-from betting_strategy import UncertaintyShrinkageBetting
+from src.feature_engineering import EloRating, Glicko2Rating
+from src.features import FEATURES, build_prediction_feature_vector
+from src.betting_strategy import UncertaintyShrinkageBetting
 
 # Load the trained model and preprocessed data
 @st.cache_resource
 def load_model_and_data():
     try:
-        model = joblib.load('tennis_model.joblib')  # Using simplified filename
-        historical_data = pd.read_csv('tennis_features.csv')  # Using simplified filename
+        model = joblib.load('models/tennis_model.joblib')  # Load from models directory
+        historical_data = pd.read_csv('data/tennis_features.csv')  # Load from data directory
         historical_data['Date'] = pd.to_datetime(historical_data['Date'])
         return model, historical_data
     except FileNotFoundError:
         st.error("Model or data files not found. Running model training first...")
-        import train_model
+        import src.train_model as train_model
         train_model.train_model()
         st.success("Model trained successfully. Please refresh the page.")
         st.stop()
@@ -111,16 +200,27 @@ def calculate_glicko2_data(historical_data, player, surface, as_of_date):
     # Return the player's current Glicko-2 data
     return glicko2.get_player_data(player, current_date=as_of_date)
 
-def get_player_stats(historical_data, player, surface, as_of_date):
+def get_comprehensive_player_stats(historical_data, player, surface, as_of_date):
+    """Get comprehensive player statistics needed for all features."""
     # Get matches where player appears as either Winner or Loser
     player_matches = historical_data[
         ((historical_data['Winner'] == player) | (historical_data['Loser'] == player)) &
         (historical_data['Date'] < as_of_date)
-    ].copy()
+    ].copy().sort_values('Date')
     
-    # Career stats
+    # Initialize defaults
+    career_win_percentage = 0.5
+    surface_win_percentage = 0.5
+    recent_form = 0.5
+    win_streak = 0
+    loss_streak = 0
+    fatigue_days = 99  # Default high fatigue if no matches
+    surface_adaptability = 0.0
+    h2h_surface_win_pct = 0.5
+    
     total_matches = len(player_matches)
     if total_matches > 0:
+        # Career stats
         wins = len(player_matches[player_matches['Winner'] == player])
         career_win_percentage = wins / total_matches
         
@@ -131,20 +231,51 @@ def get_player_stats(historical_data, player, surface, as_of_date):
             surface_wins = len(surface_matches[surface_matches['Winner'] == player])
             surface_win_percentage = surface_wins / surface_total
         else:
-            surface_win_percentage = career_win_percentage  # Use career stats if no surface data
+            surface_win_percentage = career_win_percentage
         
-        # Recent form
+        # Recent form (last 10 matches)
         recent_matches = player_matches.sort_values('Date', ascending=False).head(10)
         if len(recent_matches) > 0:
             recent_wins = len(recent_matches[recent_matches['Winner'] == player])
             recent_form = recent_wins / len(recent_matches)
         else:
-            recent_form = career_win_percentage  # Use career stats if no recent matches
-    else:
-        # Default values for new players
-        career_win_percentage = 0.5
-        surface_win_percentage = 0.5
-        recent_form = 0.5
+            recent_form = career_win_percentage
+        
+        # Calculate streaks - look at most recent matches
+        recent_sorted = player_matches.sort_values('Date', ascending=False)
+        current_win_streak = 0
+        current_loss_streak = 0
+        
+        for _, match in recent_sorted.iterrows():
+            if match['Winner'] == player:
+                if current_loss_streak == 0:  # Still in win streak
+                    current_win_streak += 1
+                else:
+                    break
+            else:
+                if current_win_streak == 0:  # Still in loss streak
+                    current_loss_streak += 1
+                else:
+                    break
+        
+        win_streak = current_win_streak
+        loss_streak = current_loss_streak
+        
+        # Fatigue (days since last match)
+        if len(player_matches) > 0:
+            last_match_date = player_matches['Date'].max()
+            fatigue_days = (as_of_date - last_match_date).days
+        
+        # Surface adaptability (variance across surfaces)
+        surface_stats = {}
+        for surf in historical_data['Surface'].unique():
+            surf_matches = player_matches[player_matches['Surface'] == surf]
+            if len(surf_matches) > 0:
+                surf_wins = len(surf_matches[surf_matches['Winner'] == player])
+                surface_stats[surf] = surf_wins / len(surf_matches)
+        
+        if len(surface_stats) > 1:
+            surface_adaptability = np.var(list(surface_stats.values()))
     
     # Calculate Elo rating
     elo_rating = calculate_elo_rating(historical_data, player, surface, as_of_date)
@@ -152,9 +283,23 @@ def get_player_stats(historical_data, player, surface, as_of_date):
     # Calculate Glicko-2 data
     glicko2_data = calculate_glicko2_data(historical_data, player, surface, as_of_date)
     
-    return career_win_percentage, surface_win_percentage, recent_form, elo_rating, glicko2_data
+    return {
+        'career_win_pct': career_win_percentage,
+        'surface_win_pct': surface_win_percentage,
+        'recent_form': recent_form,
+        'elo_rating': elo_rating,
+        'glicko2_rating': glicko2_data['rating'],
+        'glicko2_rd': glicko2_data['rd'],
+        'glicko2_volatility': glicko2_data['volatility'],
+        'win_streak': win_streak,
+        'loss_streak': loss_streak,
+        'fatigue_days': fatigue_days,
+        'surface_adaptability': surface_adaptability,
+        'h2h_surface_win_pct': h2h_surface_win_pct  # Will be updated with H2H function
+    }
 
-def get_h2h_stats(historical_data, player1, player2, as_of_date):
+def get_comprehensive_h2h_stats(historical_data, player1, player2, surface, as_of_date):
+    """Get comprehensive head-to-head statistics."""
     h2h_matches = historical_data[
         (historical_data['Date'] < as_of_date) &
         (
@@ -163,14 +308,44 @@ def get_h2h_stats(historical_data, player1, player2, as_of_date):
         )
     ].copy()
     
+    # Overall H2H
     if len(h2h_matches) == 0:
-        # Default to 50-50 if no head-to-head history
-        return 0.5
+        player1_h2h_win_pct = 0.5
+        player2_h2h_win_pct = 0.5
+    else:
+        player1_wins = len(h2h_matches[h2h_matches['Winner'] == player1])
+        player1_h2h_win_pct = player1_wins / len(h2h_matches)
+        player2_h2h_win_pct = 1 - player1_h2h_win_pct
     
-    # Count wins for player1
-    player1_wins = len(h2h_matches[h2h_matches['Winner'] == player1])
+    # Surface-specific H2H
+    surface_h2h_matches = h2h_matches[h2h_matches['Surface'] == surface]
+    if len(surface_h2h_matches) == 0:
+        player1_h2h_surface_win_pct = 0.5
+        player2_h2h_surface_win_pct = 0.5
+    else:
+        surface_player1_wins = len(surface_h2h_matches[surface_h2h_matches['Winner'] == player1])
+        player1_h2h_surface_win_pct = surface_player1_wins / len(surface_h2h_matches)
+        player2_h2h_surface_win_pct = 1 - player1_h2h_surface_win_pct
     
-    return player1_wins / len(h2h_matches)
+    return {
+        'player1_h2h_win_pct': player1_h2h_win_pct,
+        'player2_h2h_win_pct': player2_h2h_win_pct,
+        'player1_h2h_surface_win_pct': player1_h2h_surface_win_pct,
+        'player2_h2h_surface_win_pct': player2_h2h_surface_win_pct
+    }
+
+def get_player_stats(historical_data, player, surface, as_of_date):
+    """Legacy function for backward compatibility."""
+    stats = get_comprehensive_player_stats(historical_data, player, surface, as_of_date)
+    return (stats['career_win_pct'], stats['surface_win_pct'], stats['recent_form'], 
+            stats['elo_rating'], {'rating': stats['glicko2_rating'], 'rd': stats['glicko2_rd'], 
+                                 'volatility': stats['glicko2_volatility']})
+
+def get_h2h_stats(historical_data, player1, player2, as_of_date):
+    """Legacy function for backward compatibility."""
+    # Just get overall H2H for any surface
+    h2h_data = get_comprehensive_h2h_stats(historical_data, player1, player2, 'Hard', as_of_date)
+    return h2h_data['player1_h2h_win_pct']
 
 def main():
     st.title("Tennis Match Predictor")
@@ -221,20 +396,23 @@ def main():
                     st.error("Please select different players")
                 else:
                     current_date = pd.Timestamp.now()
-                    p1_career_win_pct, p1_surface_win_pct, p1_form, p1_elo, p1_glicko2 = get_player_stats(historical_data, player1, surface, current_date)
-                    p2_career_win_pct, p2_surface_win_pct, p2_form, p2_elo, p2_glicko2 = get_player_stats(historical_data, player2, surface, current_date)
-                    h2h_win_pct = get_h2h_stats(historical_data, player1, player2, current_date)
+                    
+                    # Get comprehensive stats for both players
+                    p1_stats = get_comprehensive_player_stats(historical_data, player1, surface, current_date)
+                    p2_stats = get_comprehensive_player_stats(historical_data, player2, surface, current_date)
+                    
+                    # Get H2H stats
+                    h2h_stats = get_comprehensive_h2h_stats(historical_data, player1, player2, surface, current_date)
+                    
+                    # Update H2H specific stats
+                    p1_stats['h2h_win_pct'] = h2h_stats['player1_h2h_win_pct']
+                    p2_stats['h2h_win_pct'] = h2h_stats['player2_h2h_win_pct']
+                    p1_stats['h2h_surface_win_pct'] = h2h_stats['player1_h2h_surface_win_pct']
+                    p2_stats['h2h_surface_win_pct'] = h2h_stats['player2_h2h_surface_win_pct']
 
-                    features = pd.DataFrame({
-                        'career_win_pct_diff': [p1_career_win_pct - p2_career_win_pct],
-                        'surface_win_pct_diff': [p1_surface_win_pct - p2_surface_win_pct],
-                        'recent_form_diff': [p1_form - p2_form],
-                        'h2h_win_pct_diff': [h2h_win_pct - (1 - h2h_win_pct)],
-                        'elo_rating_diff': [p1_elo - p2_elo],
-                        'glicko2_rating_diff': [p1_glicko2['rating'] - p2_glicko2['rating']],
-                        'glicko2_rd_diff': [p2_glicko2['rd'] - p1_glicko2['rd']],  # Lower RD is better
-                        'glicko2_volatility_diff': [p2_glicko2['volatility'] - p1_glicko2['volatility']]  # Lower volatility is better
-                    })
+                    # Build feature vector using centralized computation
+                    feature_values = build_prediction_feature_vector(p1_stats, p2_stats)
+                    features = pd.DataFrame([feature_values])
 
                     feature_cols = FEATURES
                     win_prob = model.predict_proba(features[feature_cols])[0][1]
@@ -245,17 +423,9 @@ def main():
                     st.session_state.predicted_player1 = player1
                     st.session_state.predicted_player2 = player2
                     st.session_state.predicted_surface = surface
-                    st.session_state.predicted_p1_elo = p1_elo
-                    st.session_state.predicted_p2_elo = p2_elo
-                    st.session_state.predicted_p1_glicko2 = p1_glicko2
-                    st.session_state.predicted_p2_glicko2 = p2_glicko2
-                    st.session_state.predicted_p1_career_win_pct = p1_career_win_pct
-                    st.session_state.predicted_p2_career_win_pct = p2_career_win_pct
-                    st.session_state.predicted_p1_surface_win_pct = p1_surface_win_pct
-                    st.session_state.predicted_p2_surface_win_pct = p2_surface_win_pct
-                    st.session_state.predicted_p1_form = p1_form
-                    st.session_state.predicted_p2_form = p2_form
-                    st.session_state.predicted_h2h_win_pct = h2h_win_pct
+                    st.session_state.predicted_p1_stats = p1_stats
+                    st.session_state.predicted_p2_stats = p2_stats
+                    st.session_state.predicted_h2h_stats = h2h_stats
 
         if st.session_state.prediction_made:
             # Retrieve results from session state
@@ -263,17 +433,22 @@ def main():
             player1 = st.session_state.predicted_player1
             player2 = st.session_state.predicted_player2
             surface = st.session_state.predicted_surface
-            p1_elo = st.session_state.predicted_p1_elo
-            p2_elo = st.session_state.predicted_p2_elo
-            p1_glicko2 = st.session_state.predicted_p1_glicko2
-            p2_glicko2 = st.session_state.predicted_p2_glicko2
-            p1_career_win_pct = st.session_state.predicted_p1_career_win_pct
-            p2_career_win_pct = st.session_state.predicted_p2_career_win_pct
-            p1_surface_win_pct = st.session_state.predicted_p1_surface_win_pct
-            p2_surface_win_pct = st.session_state.predicted_p2_surface_win_pct
-            p1_form = st.session_state.predicted_p1_form
-            p2_form = st.session_state.predicted_p2_form
-            h2h_win_pct = st.session_state.predicted_h2h_win_pct
+            p1_stats = st.session_state.predicted_p1_stats
+            p2_stats = st.session_state.predicted_p2_stats
+            h2h_stats = st.session_state.predicted_h2h_stats
+
+            # Extract individual stats for display (backward compatibility)
+            p1_elo = p1_stats['elo_rating']
+            p2_elo = p2_stats['elo_rating']
+            p1_glicko2 = {'rating': p1_stats['glicko2_rating'], 'rd': p1_stats['glicko2_rd'], 'volatility': p1_stats['glicko2_volatility']}
+            p2_glicko2 = {'rating': p2_stats['glicko2_rating'], 'rd': p2_stats['glicko2_rd'], 'volatility': p2_stats['glicko2_volatility']}
+            p1_career_win_pct = p1_stats['career_win_pct']
+            p2_career_win_pct = p2_stats['career_win_pct']
+            p1_surface_win_pct = p1_stats['surface_win_pct']
+            p2_surface_win_pct = p2_stats['surface_win_pct']
+            p1_form = p1_stats['recent_form']
+            p2_form = p2_stats['recent_form']
+            h2h_win_pct = h2h_stats['player1_h2h_win_pct']
 
             # Determine the probability of the predicted winner and the predicted winner's name
             if win_prob >= 0.5:
