@@ -140,13 +140,23 @@ class Glicko2Rating:
             B = C
             fb = fc
             
-        new_volatility = math.exp(C / 2)
-        
+
+        # Clamp volatility to [0.01, 0.5] to prevent drift/extremes
+        new_volatility = max(0.01, min(0.5, math.exp(C / 2)))
+        # Diagnostic: print and check for negative volatility
+        if new_volatility < 0:
+            raise ValueError(f"Negative volatility for {player}: {new_volatility}")
+        if math.isnan(new_volatility):
+            raise ValueError(f"NaN volatility for {player}")
+        # Print stats for debugging
+        if hasattr(self, '_volatility_debug') and self._volatility_debug:
+            print(f"Volatility stats for {player} on {match_date}: {new_volatility}")
+
         # Step 5: Update rating and RD
         phi_star = math.sqrt(phi * phi + new_volatility * new_volatility)
         new_phi = 1.0 / math.sqrt(1.0 / (phi_star * phi_star) + 1.0 / v)
         new_mu = mu + new_phi * new_phi * delta / v
-        
+
         # Convert back to original scale and update
         self.players[player] = {
             'rating': self._unscale_rating(new_mu),
@@ -232,7 +242,7 @@ def calculate_features(df):
     surface_stats = {}
     h2h_stats = {}
     recent_matches = {}
-    
+    all_surfaces = set()
     features = []
     
     for idx, match in tqdm(df.iterrows(), total=len(df)):
@@ -240,14 +250,32 @@ def calculate_features(df):
         winner = match['Winner']
         loser = match['Loser']
         surface = match['Surface']
+        all_surfaces.add(surface)
         
         for player in [winner, loser]:
             if player not in player_stats:
                 player_stats[player] = {'matches': 0, 'wins': 0}
             if player not in surface_stats:
-                surface_stats[player] = {surf: {'matches': 0, 'wins': 0} for surf in df['Surface'].unique()}
+                surface_stats[player] = {s: {'matches': 0, 'wins': 0} for s in all_surfaces}
+            # Dynamically add new surfaces as they appear
+            if surface not in surface_stats[player]:
+                surface_stats[player][surface] = {'matches': 0, 'wins': 0}
             if player not in recent_matches:
                 recent_matches[player] = []
+            # For streaks and fatigue
+            if 'last_match_date' not in player_stats[player]:
+                player_stats[player]['last_match_date'] = None
+            if 'win_streak' not in player_stats[player]:
+                player_stats[player]['win_streak'] = 0
+            if 'loss_streak' not in player_stats[player]:
+                player_stats[player]['loss_streak'] = 0
+            if 'surface_wins' not in player_stats[player]:
+                player_stats[player]['surface_wins'] = {}
+                player_stats[player]['surface_matches'] = {}
+            # Dynamically add new surfaces for adaptability stats
+            if surface not in player_stats[player]['surface_wins']:
+                player_stats[player]['surface_wins'][surface] = 0
+                player_stats[player]['surface_matches'][surface] = 0
                 
         pre_winner_elo = elo_system.get_rating(winner, date)
         pre_loser_elo = elo_system.get_rating(loser, date)
@@ -261,15 +289,79 @@ def calculate_features(df):
         pre_loser_recent = list(recent_matches[loser])[-10:] if recent_matches[loser] else []
         h2h_key = tuple(sorted([winner, loser]))
         if h2h_key not in h2h_stats:
-            h2h_stats[h2h_key] = {'matches': 0, 'wins': {winner: 0, loser: 0}}
+            h2h_stats[h2h_key] = {
+                'matches': 0,
+                'wins': {winner: 0, loser: 0},
+                'surface_matches': {surf: 0 for surf in all_surfaces},
+                'surface_wins': {
+                    winner: {surf: 0 for surf in all_surfaces},
+                    loser: {surf: 0 for surf in all_surfaces}
+                }
+            }
+        # Dynamically add new surfaces for H2H as they appear
+        for surf in all_surfaces:
+            if surf not in h2h_stats[h2h_key]['surface_matches']:
+                h2h_stats[h2h_key]['surface_matches'][surf] = 0
+            if surf not in h2h_stats[h2h_key]['surface_wins'][winner]:
+                h2h_stats[h2h_key]['surface_wins'][winner][surf] = 0
+            if surf not in h2h_stats[h2h_key]['surface_wins'][loser]:
+                h2h_stats[h2h_key]['surface_wins'][loser][surf] = 0
         pre_h2h = h2h_stats[h2h_key].copy()
+
+        # --- New Features ---
+        # Win/loss streaks
+        winner_win_streak = pre_winner_stats.get('win_streak', 0)
+        loser_win_streak = pre_loser_stats.get('win_streak', 0)
+        winner_loss_streak = pre_winner_stats.get('loss_streak', 0)
+        loser_loss_streak = pre_loser_stats.get('loss_streak', 0)
+        win_streak_diff = winner_win_streak - loser_win_streak
+        loss_streak_diff = winner_loss_streak - loser_loss_streak
+
+        # Fatigue (days since last match)
+        winner_last = pre_winner_stats.get('last_match_date', None)
+        loser_last = pre_loser_stats.get('last_match_date', None)
+        winner_fatigue = (date - winner_last).days if winner_last is not None else 99
+        loser_fatigue = (date - loser_last).days if loser_last is not None else 99
+        fatigue_days_diff = winner_fatigue - loser_fatigue
+
+        # H2H win % on current surface
+        h2h_surface_matches = pre_h2h.get('surface_matches', {}).get(surface, 0)
+        h2h_surface_wins_winner = pre_h2h.get('surface_wins', {}).get(winner, {}).get(surface, 0)
+        h2h_surface_wins_loser = pre_h2h.get('surface_wins', {}).get(loser, {}).get(surface, 0)
+        winner_h2h_surface_pct = h2h_surface_wins_winner / max(1, h2h_surface_matches) if h2h_surface_matches > 0 else 0.5
+        loser_h2h_surface_pct = h2h_surface_wins_loser / max(1, h2h_surface_matches) if h2h_surface_matches > 0 else 0.5
+        h2h_surface_win_pct_diff = winner_h2h_surface_pct - loser_h2h_surface_pct
+
+        # Surface adaptability (variance of win % across surfaces seen so far)
+        winner_surface_pcts = [
+            pre_winner_stats['surface_wins'][surf] / max(1, pre_winner_stats['surface_matches'][surf])
+            for surf in pre_winner_stats['surface_wins']
+            if pre_winner_stats['surface_matches'][surf] > 0
+        ]
+        loser_surface_pcts = [
+            pre_loser_stats['surface_wins'][surf] / max(1, pre_loser_stats['surface_matches'][surf])
+            for surf in pre_loser_stats['surface_wins']
+            if pre_loser_stats['surface_matches'][surf] > 0
+        ]
+        winner_surface_var = np.var(winner_surface_pcts) if winner_surface_pcts else 0.0
+        loser_surface_var = np.var(loser_surface_pcts) if loser_surface_pcts else 0.0
+        surface_adaptability_diff = winner_surface_var - loser_surface_var
 
         winner_career_pct = pre_winner_stats['wins'] / max(1, pre_winner_stats['matches']) if pre_winner_stats['matches'] > 0 else 0.5
         loser_career_pct = pre_loser_stats['wins'] / max(1, pre_loser_stats['matches']) if pre_loser_stats['matches'] > 0 else 0.5
         winner_surface_pct = pre_winner_surface_stat['wins'] / max(1, pre_winner_surface_stat['matches']) if pre_winner_surface_stat['matches'] > 0 else winner_career_pct
         loser_surface_pct = pre_loser_surface_stat['wins'] / max(1, pre_loser_surface_stat['matches']) if pre_loser_surface_stat['matches'] > 0 else loser_career_pct
-        winner_form = sum(pre_winner_recent) / len(pre_winner_recent) if pre_winner_recent else winner_career_pct
-        loser_form = sum(pre_loser_recent) / len(pre_loser_recent) if pre_loser_recent else loser_career_pct
+        # Weighted recent form (recent matches matter more)
+        if pre_winner_recent:
+            weights = [0.9**i for i in range(len(pre_winner_recent))][::-1]
+            winner_form = np.average(pre_winner_recent, weights=weights)
+        else:
+            winner_form = winner_career_pct
+        if pre_loser_recent:
+            weights = [0.9**i for i in range(len(pre_loser_recent))][::-1]
+            loser_form = np.average(pre_loser_recent, weights=weights)
+        else:
+            loser_form = loser_career_pct
         winner_h2h_pct = pre_h2h['wins'][winner] / max(1, pre_h2h['matches']) if pre_h2h['matches'] > 0 else 0.5
         loser_h2h_pct = pre_h2h['wins'][loser] / max(1, pre_h2h['matches']) if pre_h2h['matches'] > 0 else 0.5
 
@@ -297,6 +389,12 @@ def calculate_features(df):
             'glicko2_rating_diff': pre_winner_glicko2['rating'] - pre_loser_glicko2['rating'],
             'glicko2_rd_diff': pre_loser_glicko2['rd'] - pre_winner_glicko2['rd'],
             'glicko2_volatility_diff': pre_winner_glicko2['volatility'] - pre_loser_glicko2['volatility'],
+            # New features
+            'win_streak_diff': win_streak_diff,
+            'loss_streak_diff': loss_streak_diff,
+            'fatigue_days_diff': fatigue_days_diff,
+            'h2h_surface_win_pct_diff': h2h_surface_win_pct_diff,
+            'surface_adaptability_diff': surface_adaptability_diff,
             'Win': 1,
             'Date': date,
             'match_id': match_id
@@ -315,6 +413,12 @@ def calculate_features(df):
             'glicko2_rating_diff': pre_loser_glicko2['rating'] - pre_winner_glicko2['rating'],
             'glicko2_rd_diff': pre_winner_glicko2['rd'] - pre_loser_glicko2['rd'],
             'glicko2_volatility_diff': pre_winner_glicko2['volatility'] - pre_loser_glicko2['volatility'],
+            # New features (reverse diff)
+            'win_streak_diff': -win_streak_diff,
+            'loss_streak_diff': -loss_streak_diff,
+            'fatigue_days_diff': -fatigue_days_diff,
+            'h2h_surface_win_pct_diff': -h2h_surface_win_pct_diff,
+            'surface_adaptability_diff': -surface_adaptability_diff,
             'Win': 0,
             'Date': date,
             'match_id': match_id
@@ -324,6 +428,30 @@ def calculate_features(df):
                 loser_row[k] = np.nan_to_num(loser_row[k], nan=0.0)
         features.append(loser_row)
         
+        # Update streaks and last match date
+        for player, is_winner in [(winner, True), (loser, False)]:
+            if player_stats[player]['last_match_date'] is not None:
+                days_since = (date - player_stats[player]['last_match_date']).days
+            else:
+                days_since = None
+            player_stats[player]['last_match_date'] = date
+            if is_winner:
+                player_stats[player]['win_streak'] = player_stats[player].get('win_streak', 0) + 1
+                player_stats[player]['loss_streak'] = 0
+            else:
+                player_stats[player]['loss_streak'] = player_stats[player].get('loss_streak', 0) + 1
+                player_stats[player]['win_streak'] = 0
+        
+        # Update surface stats for adaptability
+        player_stats[winner]['surface_wins'][surface] += 1
+        player_stats[winner]['surface_matches'][surface] += 1
+        player_stats[loser]['surface_matches'][surface] += 1
+
+        # Update H2H surface stats
+        h2h_stats[h2h_key]['surface_matches'][surface] = h2h_stats[h2h_key]['surface_matches'].get(surface, 0) + 1
+        h2h_stats[h2h_key]['surface_wins'][winner][surface] = h2h_stats[h2h_key]['surface_wins'][winner].get(surface, 0) + 1
+        # loser gets no win for this surface
+
         elo_system.update_rating(winner, loser, date, margin_of_victory=margin)
         glicko2_system.update_rating(winner, loser, date, margin_of_victory=margin)
         
@@ -341,7 +469,12 @@ def calculate_features(df):
         recent_matches[winner].append(1)
         recent_matches[loser].append(0)
     
-    return pd.DataFrame(features)
+    feat_df = pd.DataFrame(features)
+    # Temporal leakage check
+    max_date = df['Date'].max()
+    if (feat_df['Date'] > max_date).any():
+        raise ValueError("Temporal leakage detected! Future dates in features")
+    return feat_df
 
 if __name__ == '__main__':
     raw_data_path = 'TennisMatch/tennis_data/tennis_data.csv'

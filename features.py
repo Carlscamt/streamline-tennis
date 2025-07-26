@@ -16,4 +16,9 @@ FEATURES = [
     'glicko2_rating_diff',
     'glicko2_rd_diff',
     'glicko2_volatility_diff',
+    'fatigue_days_diff',
+    'h2h_surface_win_pct_diff',
+    'surface_adaptability_diff',
+    'win_streak_diff',
+    'loss_streak_diff',
 ]
