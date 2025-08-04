@@ -23,7 +23,7 @@ def process_data(data_path, output_path):
     combined_df.to_csv(output_path, index=False)
 
 if __name__ == '__main__':
-    data_path = 'C:/Users/Carlos/Documents/ODST/tennis_data'
-    output_path = 'C:/Users/Carlos/Documents/ODST/tennis_data/tennis_data.csv'
+    data_path = '.'  # Current directory
+    output_path = './tennis_data.csv'
     process_data(data_path, output_path)
     print(f"Data processed and saved to {output_path}")

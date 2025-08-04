@@ -604,8 +604,8 @@ def calculate_features(df):
     return feat_df
 
 if __name__ == '__main__':
-    raw_data_path = 'TennisMatch/tennis_data/tennis_data.csv'
-    features_output_path = 'tennis_features.csv'
+    raw_data_path = '../data/tennis_data/tennis_data.csv'
+    features_output_path = '../data/tennis_features.csv'
     original_df = pd.read_csv(raw_data_path, low_memory=False)
     features_df = calculate_features(original_df)
     features_df.to_csv(features_output_path, index=False)
