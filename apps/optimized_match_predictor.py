@@ -392,7 +392,7 @@ def main():
             
             # Progress bar visualization
             st.write("**Win Probability Visualization:**")
-            prob_bar = st.progress(win_prob)
+            prob_bar = st.progress(float(win_prob))
             
             # Confidence assessment
             confidence = abs(win_prob - 0.5) * 2
