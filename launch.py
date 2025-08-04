@@ -50,28 +50,10 @@ def launch_optimized_app():
         return True
 
 def launch_legacy_app():
-    """Launch the original Streamlit app."""
-    repo_root = get_repo_root()
-    app_path = repo_root / "apps" / "match_predictor.py"
-    
-    if not app_path.exists():
-        print("❌ Legacy app not found at:", app_path)
-        return False
-    
-    print("📱 Launching ORIGINAL Tennis Predictor...")
-    print("🌐 Opening at: http://localhost:8501")
-    print("-" * 50)
-    
-    try:
-        subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path)], 
-                      cwd=repo_root, check=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error launching app: {e}")
-        return False
-    except KeyboardInterrupt:
-        print("\n👋 App stopped by user")
-        return True
+    """Legacy app has been removed - redirect to optimized app."""
+    print("⚠️  Legacy app has been removed for code cleanup.")
+    print("� Launching the HIGH-PERFORMANCE optimized app instead...")
+    return launch_optimized_app()
 
 def run_comprehensive_test():
     """Run the comprehensive system test."""
