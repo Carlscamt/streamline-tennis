@@ -106,20 +106,36 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import accuracy_score, log_loss
 import joblib
-from features import FEATURES
+from features import FEATURES, ADDITIONAL_FEATURES
 
 def train_model():
     """Train tennis prediction model."""
     print("Loading data...")
     
-    df = pd.read_csv('data/tennis_features.csv')
+    df = pd.read_csv('../data/tennis_features_sample.csv')
     df['Date'] = pd.to_datetime(df['Date'])
     
-    # Use centralized feature list
-    X = df[FEATURES]
+    # Use ALL features (core + additional) for enhanced model
+    ALL_FEATURES = FEATURES + ADDITIONAL_FEATURES
+    print(f"Using {len(FEATURES)} core features + {len(ADDITIONAL_FEATURES)} additional features = {len(ALL_FEATURES)} total features")
+    
+    # Check which features are available in the dataset
+    available_features = [f for f in ALL_FEATURES if f in df.columns]
+    missing_features = [f for f in ALL_FEATURES if f not in df.columns]
+    
+    if missing_features:
+        print(f"WARNING: {len(missing_features)} features missing from dataset:")
+        for feature in missing_features[:10]:  # Show first 10
+            print(f"  - {feature}")
+        if len(missing_features) > 10:
+            print(f"  ... and {len(missing_features) - 10} more")
+        print(f"Training with {len(available_features)} available features")
+    
+    # Use available features
+    X = df[available_features]
     y = df['Win']
     
-    print(f"Dataset: {len(df)} matches, {len(FEATURES)} features")
+    print(f"Dataset: {len(df)} matches, {len(available_features)} features")
     
     # Proper match-level split: ensure both perspectives of a match are in the same set
     if 'match_id' in df.columns:
@@ -174,7 +190,7 @@ def train_model():
     
     # Feature importance
     importance = pd.DataFrame({
-        'feature': FEATURES,
+        'feature': available_features,
         'importance': model.feature_importances_
     }).sort_values('importance', ascending=False)
     
@@ -183,8 +199,8 @@ def train_model():
         print(f"{row['feature']:<25} {row['importance']:.4f}")
     
     # Save
-    joblib.dump(model, 'models/tennis_model.joblib')
-    importance.to_csv('data/feature_importance.csv', index=False)
+    joblib.dump(model, '../models/tennis_model.joblib')
+    importance.to_csv('../data/feature_importance.csv', index=False)
     
     print("\nModel saved!")
     return model

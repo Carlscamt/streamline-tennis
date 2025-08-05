@@ -227,6 +227,187 @@ def _loss_streak_diff(context):
 #     p1, p2 = _get_players(context)
 #     return p1['ranking'] - p2['ranking']
 
+# ============================================================================
+# TOURNAMENT TYPE FEATURES - Add these to your existing code
+# ============================================================================
+
+# @register_feature('atp250_win_pct_diff', additional=True)
+# def _atp250_win_pct_diff(context):
+#     """Win percentage difference in ATP250 tournaments"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('atp250_win_pct', 0.5) - p2.get('atp250_win_pct', 0.5)
+
+# @register_feature('atp500_win_pct_diff', additional=True)
+# def _atp500_win_pct_diff(context):
+#     """Win percentage difference in ATP500 tournaments"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('atp500_win_pct', 0.5) - p2.get('atp500_win_pct', 0.5)
+
+@register_feature('masters1000_win_pct_diff', additional=True)
+def _masters1000_win_pct_diff(context):
+    """Win percentage difference in Masters 1000 tournaments"""
+    p1, p2 = _get_players(context)
+    return p1.get('masters1000_win_pct', 0.5) - p2.get('masters1000_win_pct', 0.5)
+
+@register_feature('grand_slam_win_pct_diff', additional=True)
+def _grand_slam_win_pct_diff(context):
+    """Win percentage difference in Grand Slam tournaments"""
+    p1, p2 = _get_players(context)
+    return p1.get('grand_slam_win_pct', 0.5) - p2.get('grand_slam_win_pct', 0.5)
+
+# ============================================================================
+# SURFACE-SPECIFIC FEATURES
+# ============================================================================
+
+@register_feature('hard_court_win_pct_diff', additional=True)
+def _hard_court_win_pct_diff(context):
+    """Win percentage difference on hard courts"""
+    p1, p2 = _get_players(context)
+    return p1.get('hard_court_win_pct', 0.5) - p2.get('hard_court_win_pct', 0.5)
+
+@register_feature('clay_court_win_pct_diff', additional=True)
+def _clay_court_win_pct_diff(context):
+    """Win percentage difference on clay courts"""
+    p1, p2 = _get_players(context)
+    return p1.get('clay_court_win_pct', 0.5) - p2.get('clay_court_win_pct', 0.5)
+
+@register_feature('grass_court_win_pct_diff', additional=True)
+def _grass_court_win_pct_diff(context):
+    """Win percentage difference on grass courts"""
+    p1, p2 = _get_players(context)
+    return p1.get('grass_court_win_pct', 0.5) - p2.get('grass_court_win_pct', 0.5)
+
+# @register_feature('surface_dominance_diff')
+# def _surface_dominance_diff(context):
+#     """Surface dominance - how much better a player is on current surface vs others"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('surface_dominance', 0.0) - p2.get('surface_dominance', 0.0)
+
+# @register_feature('surface_variability_diff')
+# def _surface_variability_diff(context):
+#     """Surface variability - consistency across different surfaces (lower is better)"""
+#     p1, p2 = _get_players(context)
+#     return p2.get('surface_variability', 0.5) - p1.get('surface_variability', 0.5)
+
+# ============================================================================
+# ROUND-SPECIFIC FEATURES
+# ============================================================================
+
+@register_feature('early_round_performance_diff', additional=True)
+def _early_round_performance_diff(context):
+    """Performance difference in early rounds (1st, 2nd Round)"""
+    p1, p2 = _get_players(context)
+    return p1.get('early_round_win_pct', 0.5) - p2.get('early_round_win_pct', 0.5)
+
+@register_feature('late_round_performance_diff', additional=True)
+def _late_round_performance_diff(context):
+    """Performance difference in late rounds (Semifinals, Finals)"""
+    p1, p2 = _get_players(context)
+    return p1.get('late_round_win_pct', 0.5) - p2.get('late_round_win_pct', 0.5)
+
+@register_feature('quarterfinal_performance_diff', additional=True)
+def _quarterfinal_performance_diff(context):
+    """Performance difference in quarterfinals"""
+    p1, p2 = _get_players(context)
+    return p1.get('quarterfinal_win_pct', 0.5) - p2.get('quarterfinal_win_pct', 0.5)
+
+# ============================================================================
+# COMBINED TOURNAMENT & SURFACE FEATURES
+# ============================================================================
+
+# @register_feature('current_tournament_surface_win_pct_diff', additional=True)
+# def _current_tournament_surface_win_pct_diff(context):
+#     """Win percentage on current tournament type + surface combination"""
+#     p1, p2 = _get_players(context)
+#     tournament_type = context.get('tournament_type', 'ATP250')
+#     surface = context.get('surface', 'Hard')
+#     
+#     key = f'{tournament_type.lower()}_{surface.lower()}_win_pct'
+#     return p1.get(key, 0.5) - p2.get(key, 0.5)
+
+@register_feature('big_match_experience_diff', additional=True)
+def _big_match_experience_diff(context):
+    """Experience in high-level tournaments (Masters 1000 + Grand Slams)"""
+    p1, p2 = _get_players(context)
+    return p1.get('big_match_experience', 0.0) - p2.get('big_match_experience', 0.0)
+
+# @register_feature('surface_transition_performance_diff', additional=True)
+# def _surface_transition_performance_diff(context):
+#     """Performance when transitioning between surfaces"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('surface_transition_perf', 0.5) - p2.get('surface_transition_perf', 0.5)
+
+# ============================================================================
+# RECENT FORM BY TOURNAMENT TYPE & SURFACE
+# ============================================================================
+
+# @register_feature('recent_hard_court_form_diff', additional=True)
+# def _recent_hard_court_form_diff(context):
+#     """Recent form specifically on hard courts (last 5 matches)"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('recent_hard_court_form', 0.5) - p2.get('recent_hard_court_form', 0.5)
+
+# @register_feature('recent_clay_court_form_diff', additional=True)
+# def _recent_clay_court_form_diff(context):
+#     """Recent form specifically on clay courts (last 5 matches)"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('recent_clay_court_form', 0.5) - p2.get('recent_clay_court_form', 0.5)
+
+# @register_feature('recent_grass_court_form_diff', additional=True)
+# def _recent_grass_court_form_diff(context):
+#     """Recent form specifically on grass courts (last 5 matches)"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('recent_grass_court_form', 0.5) - p2.get('recent_grass_court_form', 0.5)
+
+# @register_feature('recent_big_tournament_form_diff', additional=True)
+# def _recent_big_tournament_form_diff(context):
+#     """Recent form in Masters 1000 and Grand Slam events"""
+#     p1, p2 = _get_players(context)
+#     return p1.get('recent_big_tournament_form', 0.5) - p2.get('recent_big_tournament_form', 0.5)
+
+# ============================================================================
+# PRESSURE & CLUTCH PERFORMANCE FEATURES
+# ============================================================================
+
+@register_feature('clutch_performance_diff', additional=True)
+def _clutch_performance_diff(context):
+    """Performance in decisive sets/games"""
+    p1, p2 = _get_players(context)
+    return p1.get('clutch_performance', 0.5) - p2.get('clutch_performance', 0.5)
+
+@register_feature('outdoor_vs_indoor_preference_diff', additional=True)
+def _outdoor_vs_indoor_preference_diff(context):
+    """Preference for outdoor vs indoor courts"""
+    p1, p2 = _get_players(context)
+    return p1.get('outdoor_preference', 0.0) - p2.get('outdoor_preference', 0.0)
+
+# ============================================================================
+# UPDATED FEATURE LISTS
+# ============================================================================
+
+# Add these to your ADDITIONAL_FEATURES list for comprehensive tournament/surface analysis
+TOURNAMENT_SURFACE_FEATURES = [
+    'atp250_win_pct_diff',
+    'atp500_win_pct_diff', 
+    'masters1000_win_pct_diff',
+    'grand_slam_win_pct_diff',
+    'hard_court_win_pct_diff',
+    'clay_court_win_pct_diff',
+    'grass_court_win_pct_diff',
+    'early_round_performance_diff',
+    'late_round_performance_diff',
+    'quarterfinal_performance_diff',
+    'current_tournament_surface_win_pct_diff',
+    'big_match_experience_diff',
+    'surface_transition_performance_diff',
+    'recent_hard_court_form_diff',
+    'recent_clay_court_form_diff', 
+    'recent_grass_court_form_diff',
+    'recent_big_tournament_form_diff',
+    'clutch_performance_diff',
+    'outdoor_vs_indoor_preference_diff'
+]
+
 
 # ============================================================================
 # HELPER FUNCTIONS - Used by feature_builder.py

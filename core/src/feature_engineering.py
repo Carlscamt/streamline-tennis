@@ -127,7 +127,7 @@ import numpy as np
 import math
 from typing import Dict, Optional
 from tqdm import tqdm
-from features import build_feature_vector
+from features import build_feature_vector, FEATURES, ADDITIONAL_FEATURES
 
 class Glicko2Rating:
     def __init__(self, initial_rating: float = 1500, initial_rd: float = 350, 
@@ -379,7 +379,31 @@ def calculate_features(df):
         
         for player in [winner, loser]:
             if player not in player_stats:
-                player_stats[player] = {'matches': 0, 'wins': 0}
+                player_stats[player] = {
+                    'matches': 0, 
+                    'wins': 0,
+                    # Tournament type statistics
+                    'atp250_matches': 0, 'atp250_wins': 0,
+                    'atp500_matches': 0, 'atp500_wins': 0,
+                    'masters1000_matches': 0, 'masters1000_wins': 0,
+                    'grand_slam_matches': 0, 'grand_slam_wins': 0,
+                    # Surface-specific statistics
+                    'hard_court_matches': 0, 'hard_court_wins': 0,
+                    'clay_court_matches': 0, 'clay_court_wins': 0,
+                    'grass_court_matches': 0, 'grass_court_wins': 0,
+                    # Round-specific statistics
+                    'early_round_matches': 0, 'early_round_wins': 0,
+                    'late_round_matches': 0, 'late_round_wins': 0,
+                    'quarterfinal_matches': 0, 'quarterfinal_wins': 0,
+                    # Advanced performance metrics
+                    'big_match_matches': 0, 'big_match_wins': 0,
+                    'clutch_matches': 0, 'clutch_wins': 0,
+                    'outdoor_matches': 0, 'outdoor_wins': 0,
+                    'indoor_matches': 0, 'indoor_wins': 0,
+                    # Recent form by surface/tournament
+                    'recent_hard_matches': [], 'recent_clay_matches': [],
+                    'recent_grass_matches': [], 'recent_big_matches': []
+                }
             if player not in surface_stats:
                 surface_stats[player] = {s: {'matches': 0, 'wins': 0} for s in all_surfaces}
             # Dynamically add new surfaces as they appear
@@ -506,6 +530,9 @@ def calculate_features(df):
         match_id = idx
 
         # Prepare context data for winner and loser
+        winner_stats = player_stats[winner]
+        loser_stats = player_stats[loser]
+        
         winner_context = {
             'career_win_pct': winner_career_pct,
             'surface_win_pct': winner_surface_pct,
@@ -519,7 +546,32 @@ def calculate_features(df):
             'loss_streak': winner_loss_streak,
             'fatigue_days': winner_fatigue,
             'h2h_surface_win_pct': winner_h2h_surface_pct,
-            'surface_adaptability': winner_surface_var
+            'surface_adaptability': winner_surface_var,
+            # Tournament-specific win percentages
+            'atp250_win_pct': winner_stats['atp250_wins'] / max(1, winner_stats['atp250_matches']),
+            'atp500_win_pct': winner_stats['atp500_wins'] / max(1, winner_stats['atp500_matches']),
+            'masters1000_win_pct': winner_stats['masters1000_wins'] / max(1, winner_stats['masters1000_matches']),
+            'grand_slam_win_pct': winner_stats['grand_slam_wins'] / max(1, winner_stats['grand_slam_matches']),
+            # Surface-specific win percentages
+            'hard_court_win_pct': winner_stats['hard_court_wins'] / max(1, winner_stats['hard_court_matches']),
+            'clay_court_win_pct': winner_stats['clay_court_wins'] / max(1, winner_stats['clay_court_matches']),
+            'grass_court_win_pct': winner_stats['grass_court_wins'] / max(1, winner_stats['grass_court_matches']),
+            # Round-specific win percentages
+            'early_round_win_pct': winner_stats['early_round_wins'] / max(1, winner_stats['early_round_matches']),
+            'late_round_win_pct': winner_stats['late_round_wins'] / max(1, winner_stats['late_round_matches']),
+            'quarterfinal_win_pct': winner_stats['quarterfinal_wins'] / max(1, winner_stats['quarterfinal_matches']),
+            # Advanced performance metrics
+            'big_match_experience': winner_stats['big_match_matches'] / max(1, winner_stats['matches']),
+            'clutch_performance': winner_stats['clutch_wins'] / max(1, winner_stats['clutch_matches']),
+            'outdoor_preference': (winner_stats['outdoor_wins'] / max(1, winner_stats['outdoor_matches'])) - 
+                                 (winner_stats['indoor_wins'] / max(1, winner_stats['indoor_matches'])),
+            # Recent form by surface (simplified - using overall recent form for now)
+            'recent_hard_court_form': winner_form,  # TODO: Implement surface-specific recent form
+            'recent_clay_court_form': winner_form,
+            'recent_grass_court_form': winner_form,
+            'recent_big_tournament_form': winner_form,
+            # Additional calculated metrics
+            'surface_transition_perf': 0.5,  # TODO: Implement surface transition logic
         }
         
         loser_context = {
@@ -535,15 +587,60 @@ def calculate_features(df):
             'loss_streak': loser_loss_streak,
             'fatigue_days': loser_fatigue,
             'h2h_surface_win_pct': loser_h2h_surface_pct,
-            'surface_adaptability': loser_surface_var
+            'surface_adaptability': loser_surface_var,
+            # Tournament-specific win percentages
+            'atp250_win_pct': loser_stats['atp250_wins'] / max(1, loser_stats['atp250_matches']),
+            'atp500_win_pct': loser_stats['atp500_wins'] / max(1, loser_stats['atp500_matches']),
+            'masters1000_win_pct': loser_stats['masters1000_wins'] / max(1, loser_stats['masters1000_matches']),
+            'grand_slam_win_pct': loser_stats['grand_slam_wins'] / max(1, loser_stats['grand_slam_matches']),
+            # Surface-specific win percentages
+            'hard_court_win_pct': loser_stats['hard_court_wins'] / max(1, loser_stats['hard_court_matches']),
+            'clay_court_win_pct': loser_stats['clay_court_wins'] / max(1, loser_stats['clay_court_matches']),
+            'grass_court_win_pct': loser_stats['grass_court_wins'] / max(1, loser_stats['grass_court_matches']),
+            # Round-specific win percentages
+            'early_round_win_pct': loser_stats['early_round_wins'] / max(1, loser_stats['early_round_matches']),
+            'late_round_win_pct': loser_stats['late_round_wins'] / max(1, loser_stats['late_round_matches']),
+            'quarterfinal_win_pct': loser_stats['quarterfinal_wins'] / max(1, loser_stats['quarterfinal_matches']),
+            # Advanced performance metrics
+            'big_match_experience': loser_stats['big_match_matches'] / max(1, loser_stats['matches']),
+            'clutch_performance': loser_stats['clutch_wins'] / max(1, loser_stats['clutch_matches']),
+            'outdoor_preference': (loser_stats['outdoor_wins'] / max(1, loser_stats['outdoor_matches'])) - 
+                                 (loser_stats['indoor_wins'] / max(1, loser_stats['indoor_matches'])),
+            # Recent form by surface (simplified - using overall recent form for now)
+            'recent_hard_court_form': loser_form,  # TODO: Implement surface-specific recent form
+            'recent_clay_court_form': loser_form,
+            'recent_grass_court_form': loser_form,
+            'recent_big_tournament_form': loser_form,
+            # Additional calculated metrics
+            'surface_transition_perf': 0.5,  # TODO: Implement surface transition logic
         }
 
+        # Add tournament and surface context for advanced features
+        tournament = match.get('Tournament', '')
+        tournament_type = 'ATP250'  # Default
+        if 'ATP 500' in tournament or '500' in tournament:
+            tournament_type = 'ATP500'
+        elif 'Masters' in tournament or 'ATP Masters 1000' in tournament or '1000' in tournament:
+            tournament_type = 'Masters1000'
+        elif 'Grand Slam' in tournament or any(gs in tournament for gs in ['Wimbledon', 'French Open', 'US Open', 'Australian Open']):
+            tournament_type = 'GrandSlam'
+        
+        # Add tournament context to both player contexts
+        winner_context['tournament_type'] = tournament_type
+        winner_context['surface'] = surface
+        loser_context['tournament_type'] = tournament_type
+        loser_context['surface'] = surface
+
+        # Use ALL features (core + additional) for comprehensive model
+        ALL_FEATURES = FEATURES + ADDITIONAL_FEATURES
+        
         # Build feature vectors using centralized computation
         feature_row = build_feature_vector(
             winner_context, 
             loser_context, 
             win_label=1, 
-            extra_fields={'Date': date, 'match_id': match_id}
+            extra_fields={'Date': date, 'match_id': match_id},
+            feature_list=ALL_FEATURES
         )
         features.append(feature_row)
 
@@ -551,7 +648,8 @@ def calculate_features(df):
             loser_context, 
             winner_context, 
             win_label=0, 
-            extra_fields={'Date': date, 'match_id': match_id}
+            extra_fields={'Date': date, 'match_id': match_id},
+            feature_list=ALL_FEATURES
         )
         features.append(loser_row)
         
@@ -589,6 +687,77 @@ def calculate_features(df):
         surface_stats[winner][surface]['matches'] += 1
         surface_stats[winner][surface]['wins'] += 1
         surface_stats[loser][surface]['matches'] += 1
+        
+        # Tournament-specific statistics
+        tournament = match.get('Tournament', '')
+        if 'ATP 250' in tournament or '250' in tournament:
+            player_stats[winner]['atp250_matches'] += 1
+            player_stats[winner]['atp250_wins'] += 1
+            player_stats[loser]['atp250_matches'] += 1
+        elif 'ATP 500' in tournament or '500' in tournament:
+            player_stats[winner]['atp500_matches'] += 1
+            player_stats[winner]['atp500_wins'] += 1
+            player_stats[loser]['atp500_matches'] += 1
+        elif 'Masters' in tournament or 'ATP Masters 1000' in tournament or '1000' in tournament:
+            player_stats[winner]['masters1000_matches'] += 1
+            player_stats[winner]['masters1000_wins'] += 1
+            player_stats[loser]['masters1000_matches'] += 1
+        elif 'Grand Slam' in tournament or any(gs in tournament for gs in ['Wimbledon', 'French Open', 'US Open', 'Australian Open']):
+            player_stats[winner]['grand_slam_matches'] += 1
+            player_stats[winner]['grand_slam_wins'] += 1
+            player_stats[loser]['grand_slam_matches'] += 1
+        
+        # Surface-specific statistics
+        if surface == 'Hard':
+            player_stats[winner]['hard_court_matches'] += 1
+            player_stats[winner]['hard_court_wins'] += 1
+            player_stats[loser]['hard_court_matches'] += 1
+        elif surface == 'Clay':
+            player_stats[winner]['clay_court_matches'] += 1
+            player_stats[winner]['clay_court_wins'] += 1
+            player_stats[loser]['clay_court_matches'] += 1
+        elif surface == 'Grass':
+            player_stats[winner]['grass_court_matches'] += 1
+            player_stats[winner]['grass_court_wins'] += 1
+            player_stats[loser]['grass_court_matches'] += 1
+        
+        # Round-specific statistics
+        round_info = match.get('Round', '')
+        if any(r in round_info for r in ['1st Round', 'First Round', 'R128', 'R64', 'R32']):
+            player_stats[winner]['early_round_matches'] += 1
+            player_stats[winner]['early_round_wins'] += 1
+            player_stats[loser]['early_round_matches'] += 1
+        elif any(r in round_info for r in ['Semifinals', 'Final', 'Finals']):
+            player_stats[winner]['late_round_matches'] += 1
+            player_stats[winner]['late_round_wins'] += 1
+            player_stats[loser]['late_round_matches'] += 1
+        elif 'Quarterfinals' in round_info:
+            player_stats[winner]['quarterfinal_matches'] += 1
+            player_stats[winner]['quarterfinal_wins'] += 1
+            player_stats[loser]['quarterfinal_matches'] += 1
+        
+        # Advanced performance metrics
+        # Big match performance (Masters/Grand Slam)
+        if any(term in tournament for term in ['Masters', 'Grand Slam', 'Wimbledon', 'French Open', 'US Open', 'Australian Open', '1000']):
+            player_stats[winner]['big_match_matches'] += 1
+            player_stats[winner]['big_match_wins'] += 1
+            player_stats[loser]['big_match_matches'] += 1
+        
+        # Clutch performance (3+ set matches or tiebreaks)
+        if margin <= 2:  # Close matches (margin <= 2 games)
+            player_stats[winner]['clutch_matches'] += 1
+            player_stats[winner]['clutch_wins'] += 1
+            player_stats[loser]['clutch_matches'] += 1
+        
+        # Indoor/Outdoor preferences (simplified heuristic)
+        if 'Indoor' in tournament or any(term in tournament for term in ['ATP Finals', 'Paris Masters']):
+            player_stats[winner]['indoor_matches'] += 1
+            player_stats[winner]['indoor_wins'] += 1
+            player_stats[loser]['indoor_matches'] += 1
+        else:
+            player_stats[winner]['outdoor_matches'] += 1
+            player_stats[winner]['outdoor_wins'] += 1
+            player_stats[loser]['outdoor_matches'] += 1
         
         h2h_stats[h2h_key]['matches'] += 1
         h2h_stats[h2h_key]['wins'][winner] += 1
