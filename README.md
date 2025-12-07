@@ -619,10 +619,6 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed gu
 - 📚 **Documentation**: Tutorials, examples, API documentation
 - 🧪 **Testing**: Unit tests, integration tests, validation
 
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🎯 **About**
 
 This tennis prediction system combines advanced machine learning with tennis domain expertise to provide accurate match predictions. The ultra-streamlined architecture makes it easy to experiment with new features while maintaining production-quality code.
@@ -634,5 +630,3 @@ This tennis prediction system combines advanced machine learning with tennis dom
 - 🎯 **Enthusiasts**: User-friendly web interface for match predictions
 
 ---
-
-**🚀 Start predicting tennis matches with confidence!** 🎾✨
